@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import Button from "../Button";
-import React, { useContext, useState, useCallback, useRef } from "react";
+import React, { useContext, useState, useCallback, useRef, useEffect } from "react";
 import Styles from "@/styles/globalStyles";
 import { ThemeContext } from "@/context/ThemeContext";
 import { COLORS } from "constants/theme";
@@ -18,21 +18,35 @@ const MyKeyboard = () => {
   // For operator
   const operatorArr = useRef<string[]>([]);
   const [operatorActive, setOperatorActive] = useState<boolean>(false);
-
+  
   const [result, setResult] = useState<number | null>(null);
-
+  
   const theme = useContext(ThemeContext);
+  
+  useEffect(() => {
+    const updateInput = () => {
+      console.log(result)
+      result && setInput(result.toString())
+    }
+    updateInput();
+  }, [result])
 
-  const handleNumberPress = (value: string) => {
+  const handleNumberPress = useCallback((value: string) => {
     // If percentage is in input, dont add more numbers
-    if (input.includes("%")) return;
-    
-    console.log("Number array", numberArr.current)
+
     if (input.length < 10) {
-      setInput((previousValue) => previousValue + value);
+      if (value === "%") {
+        if (input.includes("%")) return;
+        handlePercentage();
+      } else if (value === ".") {
+        if (input.includes(".")) return;
+        handleDotPress();
+      } else {
+        setInput((previousValue) => previousValue + value);
+      }
       setOperatorActive(false);
     }
-  };
+  }, [input[input.length - 1]]);
 
   const handleOperatorPress = useCallback(
     (value: string) => {
@@ -42,13 +56,13 @@ const MyKeyboard = () => {
       operatorArr.current = currentOprArr;
 
       // if input contains a percentage sign, return the original array, else add the input to the original array
-      const currentNumArr = input.includes("%") ? numberArr.current : [...numberArr.current, parseInt(input)];
-      numberArr.current = currentNumArr;
-      console.log("🚀 ~ file: index.tsx:42 ~ MyKeyboard ~ operatorArr.current:", operatorArr.current)
+      handleNumberArray()
 
-      // Replaces division sign with symbol Javascript uses for division
-
-      // setNumberArr(prevArr => [...prevArr, ]);
+      console.log("Number array", numberArr.current);
+      console.log(
+        "🚀 ~ file: index.tsx:42 ~ MyKeyboard ~ operatorArr.current:",
+        operatorArr.current
+      );
 
       setOperatorActive(true);
 
@@ -76,15 +90,21 @@ const MyKeyboard = () => {
     }
   };
 
+  const handleNumberArray = () => {
+    // Adds number input to array and calculates the percentage value if "%" is included in array
+    const formattedInput: number = input.includes("%")
+      ? parseFloat(input) * (1 / 100)
+      : parseFloat(input);
+    const currentNumArr = [...numberArr.current, formattedInput];
+    numberArr.current = currentNumArr;
+    console.log("Stored new input in number array")
+  };
+
   const handlePercentage = () => {
     if (input !== "") {
-      handleNumberPress("%");
-
-      const formattedInput: number = parseFloat(input) * (1/100);
-      const currentNumArr = [...numberArr.current, formattedInput];
-      numberArr.current = currentNumArr;
+      setInput((prevInput) => prevInput + "%");
     }
-  }
+  };
 
   const clearAll = () => {
     setInput("");
@@ -101,6 +121,39 @@ const MyKeyboard = () => {
   };
 
   const getResult = () => {
+    if (input !== "") {
+      handleNumberArray()
+    } 
+
+    setResult(calculateResult())
+  };
+
+  const calculateResult = (): number => {
+    const currentNumArr: number[] = numberArr.current;
+  
+    if (operatorArr.current.length === 0) {
+      return currentNumArr[0];
+    }
+    return currentNumArr.reduce((accumulator, number, index) => {
+      if (index === 0) {
+        return number; // Initialize the accumulator with the first number
+      }
+  
+      const operator = operatorArr.current[index - 1];
+  
+      switch (operator) {
+        case "*":
+          return accumulator * number;
+        case "÷":
+          return accumulator / number;
+        case "+":
+          return accumulator + number;
+        case "-":
+          return accumulator - number;
+        default:
+          return accumulator;
+      }
+    });
   };
 
   return (
@@ -115,7 +168,7 @@ const MyKeyboard = () => {
         {input === "" ? 0 : input}
       </Text>
       <View style={Styles.row}>
-        <Button title="C" onPress={() => clearAll()} />
+        <Button title="C" onPress={() => clearAll()} isGray />
         <Button
           title="+/-"
           onPress={() =>
@@ -125,11 +178,9 @@ const MyKeyboard = () => {
                 : "-" + previousInput
             )
           }
+          isGray
         />
-        <Button
-          title="%"
-          onPress={() => handlePercentage()}
-        />
+        <Button title="%" onPress={() => handleNumberPress("%")} isGray />
         <Button title="÷" onPress={() => handleOperatorPress("÷")} isBlue />
       </View>
       <View style={Styles.row}>
@@ -151,7 +202,7 @@ const MyKeyboard = () => {
         <Button title="+" onPress={() => handleOperatorPress("+")} isBlue />
       </View>
       <View style={Styles.row}>
-        <Button title="." onPress={() => handleDotPress()} />
+        <Button title="." onPress={() => handleNumberPress(".")} />
         <Button title="0" onPress={() => handleNumberPress("0")} />
         <Button title="⌫" onPress={() => handleDelete()} />
         <Button title="=" onPress={() => getResult()} isBlue />
